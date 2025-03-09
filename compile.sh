@@ -7,3 +7,5 @@ export CPPFLAGS=""
 export LDFLAGS=""
 
 make -j
+
+cp $OBJECT ~/share

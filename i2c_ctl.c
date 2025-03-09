@@ -1,6 +1,7 @@
 #include "i2c_clt.h"
 
-i2c_struct_t i2c_st[I2C_MAX_DEVICE] = {0, };
+i2c_struct_t i2c_device[I2C_MAX_DEVICE] = {0, };
+i2c_driver_t i2c_driver[I2C_MAX_INDEX] = {0, };
 
 static int get_i2c_address(I2C_DEVICE i2c_dev)
 {
@@ -13,13 +14,14 @@ static int get_i2c_address(I2C_DEVICE i2c_dev)
         break;
     
     default:
+        ret = -1;
         break;
     }
 
     return ret;
 }
 
-static int set_i2c_address(I2C_DEVICE i2c_dev)
+int set_i2c_address(I2C_DEVICE i2c_dev)
 {
     int address = 0;
     int ret = 0;
@@ -28,20 +30,20 @@ static int set_i2c_address(I2C_DEVICE i2c_dev)
     if(address < 0)
     {
         FATAL("fail to get address unkown, i2c_dev : %d", i2c_dev);
-        close(i2c_st[i2c_dev].fd);
+        close(i2c_device[i2c_dev].fd);
         return -1;
     }
 
-    ret = ioctl(i2c_st[i2c_dev].fd, I2C_SLAVE, address);
+    ret = ioctl(i2c_device[i2c_dev].fd, I2C_SLAVE, address);
     if(ret < 0)
     {
         FATAL("ioctl fail i2c_dev : %d", i2c_dev);
-        close(i2c_st[i2c_dev].fd);
+        close(i2c_device[i2c_dev].fd);
         return -1;
     }
 }
 
-static int init_i2c(I2C_INDEX i2c_index, I2C_DEVICE i2c_dev)
+static int init_i2c_driver(I2C_INDEX i2c_index)
 {
     char *i2c_route = NULL;
     int ret = 0;
@@ -72,18 +74,43 @@ static int init_i2c(I2C_INDEX i2c_index, I2C_DEVICE i2c_dev)
         return -1;
     }
 
-    i2c_st[i2c_dev].fd = ret;
+    i2c_driver[i2c_index].fd = ret;
 
-    ret = sem_init(&i2c_st[i2c_dev].sem, 0, 1);
+    ret = sem_init(&i2c_driver[i2c_index].sem, 0, 1);
     if(ret < 0)
     {
-        FATAL("fail to init sem, i2c_dev : %d", i2c_dev);
+        FATAL("fail to init sem, i2c_dev : %d", i2c_index);
         perror("error");
-        close(i2c_st[i2c_dev].fd);
+        close(i2c_driver[i2c_index].fd);
         return -1;
     }
 
     return 1;
+}
+
+int init_i2c_dev(I2C_INDEX i2c_index, I2C_DEVICE i2c_dev)
+{
+    int ret = 0;
+
+    i2c_device[i2c_dev].fd = i2c_driver[i2c_index].fd;
+    i2c_device[i2c_dev].sem = &i2c_driver[i2c_index].sem;
+
+    ret = get_i2c_address(i2c_dev);
+    if(ret < 0)
+    {
+        FATAL("unkown_device : %d", i2c_dev);
+        close(i2c_device[i2c_dev].fd);
+        return -1;
+    }
+
+    i2c_device[i2c_dev].address = ret;
+
+    return 1;
+}
+
+int init_i2c()
+{
+    return init_i2c_driver(I2C1);
 }
 
 int i2c_ioctl_read_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, size_t buffer_size)
@@ -92,12 +119,12 @@ int i2c_ioctl_read_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, s
     struct i2c_msg i2c_dev_msg[I2C_8BIT_MSG_NUM] = {0, };
     struct i2c_rdwr_ioctl_data i2c_buf = {0, };
 
-    i2c_dev_msg[I2C_REG].addr = MPU6050_ADDRESS;
+    i2c_dev_msg[I2C_REG].addr = i2c_device[i2c_dev].address;
     i2c_dev_msg[I2C_REG].buf = &reg_address;
     i2c_dev_msg[I2C_REG].flags = 0; //write mode
     i2c_dev_msg[I2C_REG].len = sizeof(reg_address);
 
-    i2c_dev_msg[I2C_DATA].addr = MPU6050_ADDRESS;
+    i2c_dev_msg[I2C_DATA].addr = i2c_device[i2c_dev].address;
     i2c_dev_msg[I2C_DATA].buf = buffer;
     i2c_dev_msg[I2C_DATA].flags = I2C_M_RD; //read mode
     i2c_dev_msg[I2C_DATA].len = buffer_size;
@@ -105,13 +132,14 @@ int i2c_ioctl_read_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, s
     i2c_buf.msgs = i2c_dev_msg;
     i2c_buf.nmsgs = sizeof(i2c_dev_msg)/sizeof(struct i2c_msg);
 
-    sem_wait(&i2c_st[i2c_dev].sem);
-    ret = ioctl(i2c_st[i2c_dev].fd, I2C_RDWR, &i2c_buf);
-    sem_post(&i2c_st[i2c_dev].sem);
+    sem_wait(i2c_device[i2c_dev].sem);
+    ret = ioctl(i2c_device[i2c_dev].fd, I2C_RDWR, &i2c_buf);
+    sem_post(i2c_device[i2c_dev].sem);
 
     if(ret < 0)
     {
-        FATAL("fail to read, slave : %d, reg : %d", MPU6050_ADDRESS, reg_address);
+        FATAL("fail to read, slave : %d, reg : %d", i2c_device[i2c_dev].address, reg_address);
+        perror("ioctl read fail");
         return ret;
     }
 
@@ -121,32 +149,55 @@ int i2c_ioctl_read_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, s
 int i2c_ioctl_write_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, size_t buffer_size)
 {
     int ret = 0;
-    struct i2c_msg i2c_dev_msg[I2C_8BIT_MSG_NUM] = {0, };
+    int len = 0;
+    int buf_index = 0;
+
+    struct i2c_msg i2c_dev_msg = {0, };
     struct i2c_rdwr_ioctl_data i2c_buf = {0, };
+    
+    len = buffer_size + sizeof(reg_address);
+    uint8_t *write_buf = calloc(sizeof(uint8_t), len);
+    
+    write_buf[buf_index++] = reg_address;
+    memcpy(write_buf + buf_index, buffer, buffer_size);
 
-    i2c_dev_msg[I2C_REG].addr = MPU6050_ADDRESS;
-    i2c_dev_msg[I2C_REG].buf = &reg_address;
-    i2c_dev_msg[I2C_REG].flags = 0; //write mode
-    i2c_dev_msg[I2C_REG].len = sizeof(reg_address);
+    i2c_dev_msg.addr = i2c_device[i2c_dev].address;
+    i2c_dev_msg.buf = write_buf;
+    i2c_dev_msg.flags = 0; //write mode
+    i2c_dev_msg.len = len;
 
-    i2c_dev_msg[I2C_DATA].addr = MPU6050_ADDRESS;
-    i2c_dev_msg[I2C_DATA].buf = buffer;
-    i2c_dev_msg[I2C_DATA].flags = 0; //read mode
-    i2c_dev_msg[I2C_DATA].len = buffer_size;
-
-    i2c_buf.msgs = i2c_dev_msg;
+    i2c_buf.msgs = &i2c_dev_msg;
     i2c_buf.nmsgs = sizeof(i2c_dev_msg)/sizeof(struct i2c_msg);
 
-    sem_wait(&i2c_st[i2c_dev].sem);
-    ret = ioctl(i2c_st[i2c_dev].fd, I2C_RDWR, &i2c_buf);
-    sem_post(&i2c_st[i2c_dev].sem);
+    sem_wait(i2c_device[i2c_dev].sem);
+    ret = ioctl(i2c_device[i2c_dev].fd, I2C_RDWR, &i2c_buf);
+    sem_post(i2c_device[i2c_dev].sem);
+
+    free(write_buf);
     
     if(ret < 0)
     {
-        FATAL("fail to write, slave : %d, reg : %d", MPU6050_ADDRESS, reg_address);
+        FATAL("fail to write, slave : %d, reg : %d", i2c_device[i2c_dev].address, reg_address);
+        perror("ioctl read fail");
         return ret;
     }
 
+    return 1;
+}
+
+int check_valid_i2c_address_8bit_ioctl(I2C_DEVICE i2c_dev)
+{
+    int ret = 0;
+    uint8_t temp_buffer = 0x00;
+
+    ret = i2c_ioctl_read_8bit(i2c_dev, 0x00, &temp_buffer, sizeof(temp_buffer));
+    if(ret < 0)
+    {
+        FATAL("fail to read data");
+        return ret;
+    }
+
+    DEBUG("valid address");
     return 1;
 }
 
@@ -154,17 +205,20 @@ static int i2c_unistd_read_8bit_function(I2C_DEVICE i2c_dev, uint8_t reg_address
 {
     int ret = 0;
 
-    ret = write(i2c_st[i2c_dev].fd, &reg_address, sizeof(reg_address));
+    set_i2c_address(i2c_dev);
+
+    ret = write(i2c_device[i2c_dev].fd, &reg_address, sizeof(reg_address));
     if(ret < 0)
     {
-        FATAL("fail to write reg address, slave : %d, reg : %d", MPU6050_ADDRESS, reg_address);
+        FATAL("fail to write reg address, slave : %d, reg : %d", i2c_device[i2c_dev].address, reg_address);
         return ret;
     }
 
-    ret = read(i2c_st[i2c_dev].fd, buffer, buffer_size);
+    ret = read(i2c_device[i2c_dev].fd, buffer, buffer_size);
     if(ret < 0)
     {
-        FATAL("fail to read, slave : %d, reg : %d", MPU6050_ADDRESS, reg_address);
+        FATAL("fail to read, slave : %d, reg : %d", i2c_device[i2c_dev].address, reg_address);
+        perror("ioctl read fail");
         return ret;
     }
 
@@ -175,17 +229,24 @@ static int i2c_unistd_write_8bit_function(I2C_DEVICE i2c_dev, uint8_t reg_addres
 {
     int ret = 0;
     int len = 0;
+    int buf_index = 0;
 
     len = buffer_size + sizeof(reg_address);
     uint8_t *write_buf = calloc(sizeof(uint8_t), len);
 
-    ret = write(i2c_st[i2c_dev].fd, write_buf, len);
+    write_buf[buf_index++] = reg_address;
+    memcpy(write_buf + buf_index, buffer, buffer_size);
+
+    set_i2c_address(i2c_dev);
+
+    ret = write(i2c_device[i2c_dev].fd, write_buf, len);
 
     free(write_buf);
 
     if(ret < 0)
     {
-        FATAL("fail to write, slave : %d, reg : %d", MPU6050_ADDRESS, reg_address);
+        FATAL("fail to write, slave : %d, reg : %d", i2c_device[i2c_dev].address, reg_address);
+        perror("ioctl read fail");
         return ret;
     }
 
@@ -196,9 +257,9 @@ int i2c_unistd_read_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, 
 {
     int ret = 0;
 
-    sem_wait(&i2c_st[i2c_dev].sem);
+    sem_wait(i2c_device[i2c_dev].sem);
     ret = i2c_unistd_read_8bit_function(i2c_dev, reg_address, buffer, buffer_size);
-    sem_post(&i2c_st[i2c_dev].sem);
+    sem_post(i2c_device[i2c_dev].sem);
 
     return ret;
 }
@@ -207,9 +268,25 @@ int i2c_unistd_write_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer,
 {
     int ret = 0;
 
-    sem_wait(&i2c_st[i2c_dev].sem);
+    sem_wait(i2c_device[i2c_dev].sem);
     ret = i2c_unistd_write_8bit_function(i2c_dev, reg_address, buffer, buffer_size);
-    sem_post(&i2c_st[i2c_dev].sem);
+    sem_post(i2c_device[i2c_dev].sem);
 
     return ret;
+}
+
+int check_valid_i2c_address_8bit_unistd(I2C_DEVICE i2c_dev)
+{
+    int ret = 0;
+    uint8_t temp_buffer = 0x00;
+
+    ret = i2c_unistd_read_8bit(i2c_dev, 0x00, &temp_buffer, sizeof(temp_buffer));
+    if(ret < 0)
+    {
+        FATAL("fail to read data");
+        return ret;
+    }
+
+    DEBUG("read data : 0x%02x", temp_buffer);
+    return 1;
 }
