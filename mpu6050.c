@@ -1,3 +1,6 @@
+/**
+ * @ref 참고로 burst_read는 동일 셈플링레이트로 변환된 데이터 2바이트를 읽어오는 것을 의미한다.
+ */
 #include "mpu6050.h"
 
 int bit_resolution = 0;
@@ -101,25 +104,25 @@ static void get_mpu6050_accelerator_resolution()
 static void get_mpu6050_x_accelerometer()
 {
     int16_t x_acc = get_mpu6050_singed_burst_read(MPU6050_ACCEL_XOUT_H);
-    DEBUG("x accelerometer : %05.02f[G]", MPU6050_CALCULATE_ACC(x_acc, bit_resolution));
+    INFO("x accelerometer : %05.02f[G]", MPU6050_CALCULATE_ACC(x_acc, bit_resolution));
 }
 
 static void get_mpu6050_y_accelerometer()
 {
     int16_t y_acc = get_mpu6050_singed_burst_read(MPU6050_ACCEL_YOUT_H);
-    DEBUG("y accelerometer : %05.02f[G]", MPU6050_CALCULATE_ACC(y_acc, bit_resolution));
+    INFO("y accelerometer : %05.02f[G]", MPU6050_CALCULATE_ACC(y_acc, bit_resolution));
 }
 
 static void get_mpu6050_z_accelerometer()
 {
     int16_t z_acc = get_mpu6050_singed_burst_read(MPU6050_ACCEL_ZOUT_H);
-    DEBUG("z accelerometer : %05.02f[G]", MPU6050_CALCULATE_ACC(z_acc, bit_resolution));
+    INFO("z accelerometer : %05.02f[G]", MPU6050_CALCULATE_ACC(z_acc, bit_resolution));
 }
 
 static void get_mpu6050_temperature()
 {
     int16_t temperature = get_mpu6050_singed_burst_read(MPU6050_TEMP_OUT_H);
-    DEBUG("temperature : %05.02f[c]", MPU6050_CALCULATE_TEMP(temperature));
+    INFO("temperature : %05.02f[c]", MPU6050_CALCULATE_TEMP(temperature));
 }
 
 static void get_mpu6050_addr()
