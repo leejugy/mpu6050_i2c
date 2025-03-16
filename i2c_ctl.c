@@ -7,6 +7,12 @@ i2c_driver_t i2c_driver[I2C_MAX_INDEX] = {
     0,
 };
 
+/**
+ * @brief i2c 디바이스의 슬레이브 주소를 반환.
+ * 
+ * @param i2c_dev i2c 디바이스 인덱스
+ * @return int 디바이스 없으면 -1, 있으면 주소 반환
+ */
 static int get_i2c_address(I2C_DEVICE i2c_dev)
 {
     int ret = -1;
@@ -25,6 +31,12 @@ static int get_i2c_address(I2C_DEVICE i2c_dev)
     return ret;
 }
 
+/**
+ * @brief i2c 디바이스가 사용하는 버스의 슬레이브 주소를 설정한다.
+ * 
+ * @param i2c_dev 사용하는 i2c 디바이스
+ * @return int 디바이스 슬레이브 주소 설정 성공시 1, 실패시 -1
+ */
 int set_i2c_address(I2C_DEVICE i2c_dev)
 {
     int address = 0;
@@ -47,6 +59,12 @@ int set_i2c_address(I2C_DEVICE i2c_dev)
     }
 }
 
+/**
+ * @brief i2c-[버스 번호]를 열고 세마포어를 초기화 하는 함수다.
+ * 
+ * @param i2c_index i2c 인덱스 (0,1,2)
+ * @return int 실패시 -1, 성공시 1
+ */
 static int init_i2c_driver(I2C_INDEX i2c_index)
 {
     char *i2c_route = NULL;
@@ -70,7 +88,7 @@ static int init_i2c_driver(I2C_INDEX i2c_index)
         break;
     }
 
-    ret = open(i2c_route, O_RDWR);
+    ret = open(i2c_route, O_RDWR); //i2c-[버스 번호]를 읽기/쓰기 권한을 주어 오픈한다.
     if (ret < 0)
     {
         FATAL("fail to open i2c driver, i2c_route : %s", i2c_route);
@@ -122,7 +140,7 @@ int i2c_ioctl_read_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, s
     int ret = 0;
     struct i2c_msg i2c_dev_msg[I2C_8BIT_MSG_NUM] = {
         0,
-    };
+    }; //배열 크기를 2로 설정
     struct i2c_rdwr_ioctl_data i2c_buf = {
         0,
     };
@@ -137,8 +155,8 @@ int i2c_ioctl_read_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, s
     i2c_dev_msg[I2C_DATA].flags = I2C_M_RD; // read mode
     i2c_dev_msg[I2C_DATA].len = buffer_size;
 
-    i2c_buf.msgs = i2c_dev_msg;
-    i2c_buf.nmsgs = sizeof(i2c_dev_msg) / sizeof(struct i2c_msg);
+    i2c_buf.msgs = i2c_dev_msg; //메시지 배열 주소
+    i2c_buf.nmsgs = sizeof(i2c_dev_msg) / sizeof(struct i2c_msg); //메시지 크기
 
     sem_wait(i2c_device[i2c_dev].sem);
     ret = ioctl(i2c_device[i2c_dev].fd, I2C_RDWR, &i2c_buf); // ioctl 함수로 i2c 드라이버에 구조체 전송
@@ -178,8 +196,8 @@ int i2c_ioctl_write_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, 
     i2c_dev_msg.flags = 0; // write mode
     i2c_dev_msg.len = len;
 
-    i2c_buf.msgs = &i2c_dev_msg;
-    i2c_buf.nmsgs = sizeof(i2c_dev_msg) / sizeof(struct i2c_msg);
+    i2c_buf.msgs = &i2c_dev_msg; //메시지 주소
+    i2c_buf.nmsgs = sizeof(i2c_dev_msg) / sizeof(struct i2c_msg); //메시지 크기
 
     sem_wait(i2c_device[i2c_dev].sem);
     ret = ioctl(i2c_device[i2c_dev].fd, I2C_RDWR, &i2c_buf); // ioctl 함수로 i2c 드라이버에 구조체 전송
@@ -213,11 +231,14 @@ int check_valid_i2c_address_8bit_ioctl(I2C_DEVICE i2c_dev)
     return 1;
 }
 
+/**
+ * @brief 세마포어가 없는 unistd i2c 읽기
+ */
 static int i2c_unistd_read_8bit_function(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, size_t buffer_size)
 {
     int ret = 0;
 
-    set_i2c_address(i2c_dev); // 슬레이브 주소 설정
+    set_i2c_address(i2c_dev); // unistd 방식은 항상 슬레이브 주소 설정해야 한다.
 
     ret = write(i2c_device[i2c_dev].fd, &reg_address, sizeof(reg_address));
     if (ret < 0)
@@ -237,6 +258,9 @@ static int i2c_unistd_read_8bit_function(I2C_DEVICE i2c_dev, uint8_t reg_address
     return ret;
 }
 
+/**
+ * @brief 세마포어가 없는 unistd i2c 쓰기
+ */
 static int i2c_unistd_write_8bit_function(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, size_t buffer_size)
 {
     int ret = 0;
@@ -269,7 +293,7 @@ int i2c_unistd_read_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer, 
 {
     int ret = 0;
 
-    sem_wait(i2c_device[i2c_dev].sem);
+    sem_wait(i2c_device[i2c_dev].sem); //세마포어
     ret = i2c_unistd_read_8bit_function(i2c_dev, reg_address, buffer, buffer_size);
     sem_post(i2c_device[i2c_dev].sem);
 
@@ -280,7 +304,7 @@ int i2c_unistd_write_8bit(I2C_DEVICE i2c_dev, uint8_t reg_address, void *buffer,
 {
     int ret = 0;
 
-    sem_wait(i2c_device[i2c_dev].sem);
+    sem_wait(i2c_device[i2c_dev].sem); //세마포어
     ret = i2c_unistd_write_8bit_function(i2c_dev, reg_address, buffer, buffer_size);
     sem_post(i2c_device[i2c_dev].sem);
 
