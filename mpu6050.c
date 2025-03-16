@@ -65,14 +65,7 @@ static int16_t get_mpu6050_singed_burst_read(MPU6050_REG reg_addr)
     uint8_t mpu6050_buffer[BURST_READ_LEN] = {
         0,
     };
-    int ret = 0;
-
-    ret = read_mpu6050_buffer(reg_addr, mpu6050_buffer, sizeof(mpu6050_buffer));
-    if(ret < 0)
-    {
-        return ret;
-    }
-
+    read_mpu6050_buffer(reg_addr, mpu6050_buffer, sizeof(mpu6050_buffer));
     return get_burst_signed_reg_value(mpu6050_buffer);
 }
 
@@ -87,14 +80,7 @@ static int16_t get_mpu6050_unsinged_burst_read(MPU6050_REG reg_addr)
     uint8_t mpu6050_buffer[BURST_READ_LEN] = {
         0,
     };
-    int ret = 0;
-
-    ret = read_mpu6050_buffer(reg_addr, mpu6050_buffer, sizeof(mpu6050_buffer));
-    if(ret < 0)
-    {
-        return ret;
-    }
-
+    read_mpu6050_buffer(reg_addr, mpu6050_buffer, sizeof(mpu6050_buffer));
     return get_burst_unsigned_reg_value(mpu6050_buffer);
 }
 
@@ -204,12 +190,6 @@ static void get_mpu6050_accelerator_resolution()
 static void get_mpu6050_x_accelerometer()
 {
     int16_t x_acc = get_mpu6050_singed_burst_read(MPU6050_ACCEL_XOUT_H);
-    if(x_acc < 0)
-    {
-        FATAL("fail to read x acc");
-        return;
-    }
-
     INFO("x accelerometer : %05.02f[G]", MPU6050_CALCULATE_ACC(x_acc, bit_resolution));
 }
 
@@ -220,12 +200,6 @@ static void get_mpu6050_x_accelerometer()
 static void get_mpu6050_y_accelerometer()
 {
     int16_t y_acc = get_mpu6050_singed_burst_read(MPU6050_ACCEL_YOUT_H);
-    if(y_acc < 0)
-    {
-        FATAL("fail to read y acc");
-        return;
-    }
-
     INFO("y accelerometer : %05.02f[G]", MPU6050_CALCULATE_ACC(y_acc, bit_resolution));
 }
 
@@ -236,12 +210,6 @@ static void get_mpu6050_y_accelerometer()
 static void get_mpu6050_z_accelerometer()
 {
     int16_t z_acc = get_mpu6050_singed_burst_read(MPU6050_ACCEL_ZOUT_H);
-    if(z_acc < 0)
-    {
-        FATAL("fail to read z acc");
-        return;
-    }
-
     INFO("z accelerometer : %05.02f[G]", MPU6050_CALCULATE_ACC(z_acc, bit_resolution));
 }
 
@@ -252,12 +220,6 @@ static void get_mpu6050_z_accelerometer()
 static void get_mpu6050_temperature()
 {
     int16_t temperature = get_mpu6050_singed_burst_read(MPU6050_TEMP_OUT_H);
-    if(temperature < 0)
-    {
-        FATAL("fail to read temperature");
-        return;
-    }
-
     INFO("temperature : %05.02f[c]", MPU6050_CALCULATE_TEMP(temperature));
 }
 
